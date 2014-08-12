@@ -1,6 +1,10 @@
+// Include required libraries
 #include <Bridge.h>
 #include <Temboo.h>
 #include <Process.h>
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BMP085_U.h>
 
 // Contains Temboo account information
 #include "TembooAccount.h" 
@@ -11,13 +15,16 @@ float humidity;
 float temperature;
 unsigned long time;
 
+float temperature_limit;
+
 // Process to get the measurement time
 Process date;
 
 // Your Google Docs data
-const String GOOGLE_USERNAME = "yourUsername";
+const String GOOGLE_USERNAME = "yourEmailAddress";
 const String GOOGLE_PASSWORD = "yourPassword";
 const String SPREADSHEET_TITLE = "Yun";
+const String TO_EMAIL_ADDRESS = "destinationEmail";
 
 // Include required libraries
 #include "DHT.h"
@@ -26,11 +33,12 @@ const String SPREADSHEET_TITLE = "Yun";
 #define DHTPIN 8 
 #define DHTTYPE DHT11
 
-// DHT instance
+// DHT & BMP instances
 DHT dht(DHTPIN, DHTTYPE);
+Adafruit_BMP085_Unified bmp = Adafruit_BMP085_Unified(10085);
 
 // Debug mode ?
-boolean debug_mode = true;
+boolean debug_mode = false;
 
 void setup() {
   
@@ -43,6 +51,9 @@ void setup() {
   
   // Initialize DHT sensor
   dht.begin();
+  
+  // Set temperature limit
+  temperature_limit = 25.0;
   
   // Start bridge
   Bridge.begin();
@@ -58,30 +69,55 @@ void setup() {
   if (debug_mode == true){
     Serial.println("Setup complete. Waiting for sensor input...\n");
   }
+  
+  // Initialise the sensor
+  if(!bmp.begin())
+  {
+    if (debug_mode == true){Serial.print("Ooops, no BMP085 detected ... Check your wiring or I2C ADDR!");}
+    while(1);
+  }
 }
 
 void loop() {
   
   // Measure the humidity & temperature
   humidity = dht.readHumidity();
-  temperature = dht.readTemperature();
     
   // Measure light level
   int lightLevel = analogRead(A0);
+  
+  // Measure pressure & temperature from BMP sensor
+  sensors_event_t event;
+  bmp.getEvent(&event);
+  float pressure = event.pressure;
+    
+   bmp.getTemperature(&temperature);
+
+   float seaLevelPressure = SENSORS_PRESSURE_SEALEVELHPA;
+   float altitude;
+   altitude = bmp.pressureToAltitude(seaLevelPressure,
+                                        event.pressure,
+                                        temperature); 
 
   if (debug_mode == true){
     Serial.println("\nCalling the /Library/Google/Spreadsheets/AppendRow Choreo...");
   }
   
   // Append data to Google Docs sheet
-  runAppendRow(lightLevel, temperature, humidity);
+  runAppendRow(humidity, lightLevel, pressure, temperature, altitude);
+  
+  // Send email alert ?
+  if (temperature < temperature_limit) {
+     if (debug_mode == true){Serial.println("Sending alert");}
+     sendTempAlert("Temperature is too low!");
+  }
         
   // Repeat every 10 minutes
   delay(600000);
 }
 
 // Function to add data to Google Docs
-void runAppendRow(int lightLevel, float temperature, float humidity) {
+void runAppendRow(float humidity, int lightLevel, float pressure, float temperature, float altitude) {
   TembooChoreo AppendRowChoreo;
 
   // Invoke the Temboo client
@@ -116,7 +152,7 @@ void runAppendRow(int lightLevel, float temperature, float humidity) {
   
   // Format data
   String data = "";
-  data = data + timeString + "," + String(temperature) + "," + String(humidity) + "," + String(lightLevel);
+  data = data + timeString + "," + String(humidity) + "," + String(lightLevel) + "," + String(pressure) + "," + String(temperature) + "," + String(altitude);
 
   // Set Choreo inputs
   AppendRowChoreo.addInput("RowData", data);
@@ -139,4 +175,56 @@ void runAppendRow(int lightLevel, float temperature, float humidity) {
     if (debug_mode == true){ Serial.println(); }
   }
   AppendRowChoreo.close();
+}
+
+// Send email alert
+void sendTempAlert(String message) {
+  
+  if (debug_mode == true){ Serial.println("Running SendAnEmail...");}
+  
+  TembooChoreo SendEmailChoreo;
+   
+  SendEmailChoreo.begin();
+    
+  // set Temboo account credentials
+  SendEmailChoreo.setAccountName(TEMBOO_ACCOUNT);
+  SendEmailChoreo.setAppKeyName(TEMBOO_APP_KEY_NAME);
+  SendEmailChoreo.setAppKey(TEMBOO_APP_KEY);
+
+  // identify the Temboo Library choreo to run (Google > Gmail > SendEmail)
+  SendEmailChoreo.setChoreo("/Library/Google/Gmail/SendEmail");
+    
+  // set the required choreo inputs
+  // see https://www.temboo.com/library/Library/Google/Gmail/SendEmail/ 
+  // for complete details about the inputs for this Choreo
+
+  // the first input is your Gmail email address
+  SendEmailChoreo.addInput("Username", GOOGLE_USERNAME);
+  // next is your Gmail password.
+  SendEmailChoreo.addInput("Password", GOOGLE_PASSWORD);
+  // who to send the email to
+  SendEmailChoreo.addInput("ToAddress", TO_EMAIL_ADDRESS);
+  // then a subject line
+  SendEmailChoreo.addInput("Subject", "ALERT: Home Temperature");
+
+  // next comes the message body, the main content of the email   
+  SendEmailChoreo.addInput("MessageBody", message);
+
+  // tell the Choreo to run and wait for the results. The 
+  // return code (returnCode) will tell us whether the Temboo client 
+  // was able to send our request to the Temboo servers
+  unsigned int returnCode = SendEmailChoreo.run();
+
+  // a return code of zero (0) means everything worked
+  if (returnCode == 0) {
+    if (debug_mode == true){Serial.println("Success! Email sent!");}
+  } else {
+    // a non-zero return code means there was an error
+    // read and print the error message
+    while (SendEmailChoreo.available()) {
+      char c = SendEmailChoreo.read();
+      if (debug_mode == true){Serial.print(c);}
+    }
+  } 
+  SendEmailChoreo.close();
 }
