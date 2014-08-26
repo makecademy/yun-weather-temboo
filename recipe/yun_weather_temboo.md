@@ -4,18 +4,19 @@ Link to the complete article: [http://www.openhomeautomation.net/yun-weather-tem
 
 ## Hardware Requirements
 
-* Arduino Yun board
-* [DHT11 sensor](https://github.com/adafruit/DHT-sensor-library)
-* BMP085 sensor
-* Photocell
-* 10K Ohm resistor
-* Breadboard and jumper wires
+* [Arduino Yun board](http://amzn.to/1q0CQr2)
+* [DHT11 sensor](http://amzn.to/1Auhhme)
+* [BMP085 sensor](http://amzn.to/VLqqHR)
+* [Photocell](http://amzn.to/1mguDdz)
+* [10K Ohm resistor](http://amzn.to/1p94iTB)
+* [Breadboard](http://amzn.to/1sRvk49)
+* [Jumper wires](http://amzn.to/1mguPJH)
 
 ## Software Requirements
 
 * Download & install the [Arduino IDE 1.5.x](http://arduino.cc/en/Main/Software#toc3)
 * Download & install the following Arduino libraries
- * [DHT library]()
+ * [DHT library](https://github.com/adafruit/DHT-sensor-library)
  * [BMP085 library](https://github.com/adafruit/Adafruit-BMP085-Library)
  * [Unified sensor library](https://github.com/adafruit/Adafruit_Sensor)
 * Create a Google Drive account 
