@@ -18,6 +18,10 @@ unsigned long time;
 // Process to get the measurement time
 Process date;
 
+// Declare functions
+void runAppendRow(float humidity, int lightLevel, 
+  float pressure, float temperature, float altitude);
+
 // Your Google Docs data
 const String GOOGLE_CLIENT_ID = "your-google-client-id";
 const String GOOGLE_CLIENT_SECRET = "your-google-client-secret";
